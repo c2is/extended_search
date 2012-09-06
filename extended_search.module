@@ -1,0 +1,93 @@
+<?php
+function extended_search_form_alter(&$form, $form_state, $form_id){
+    // var_dump($form);
+}
+function extended_search_search_info() {
+    // echo "AAA";
+  return array(
+    'title' => 'extended_search',
+  );
+}
+function extended_search_search_access() {
+    // echo "BBB";
+  return user_access('access content');
+}
+/*
+ * ATTENTION : il faut bien avoir activé ce module dans les configs de search
+ */
+
+function extended_search_search_execute($keys = NULL, $conditions = NULL) {
+   // Build matching conditions
+    // on passe par notre surcharge SearchQueryRegexp au lieu de SearchQuery
+     $query = db_select('search_index', 'i', array('target' => 'slave'))->extend('SearchQueryRegexp')->extend('PagerDefault');
+     $query->join('node', 'n', 'n.nid = i.sid');
+    /*
+     * Node type autorisés
+     */
+    // todo:passer les conditions de content type en administrables, voir avec le module custom_search
+    $queryor = db_or();
+    $queryor->condition('n.type', "article");
+    $queryor->condition('n.type', "page");
+    $queryor->condition('n.type', "dealer_locator");
+    $queryor->condition('n.type', "gamme");
+    /*
+     * La resuête d'origine
+     */
+     $query
+       ->condition('n.status', 1)
+       ->condition('n.language', $GLOBALS["language"]->language)
+       ->addTag('node_access')
+       ->searchExpression($keys, 'node')
+       ->condition($queryor);
+
+     // Insert special keywords.
+     $query->setOption('type', 'n.type');
+     $query->setOption('language', 'n.language');
+     if ($query->setOption('term', 'ti.tid')) {
+       $query->join('taxonomy_index', 'ti', 'n.nid = ti.nid');
+     }
+     // Only continue if the first pass query matches.
+     /*
+     * ON passe par notre fonction executeFirstPassRegexp en lieu et place de executeFirstPass
+     */
+     if (!$query->executeFirstPassRegexp()) {
+       return array();
+     }
+
+     // Add the ranking expressions.
+     _node_rankings($query);
+
+     // Load results.
+     $find = $query
+       ->limit(10)
+       ->execute();
+     $results = array();
+     foreach ($find as $item) {
+       // Build the node body.
+       $node = node_load($item->sid);
+       node_build_content($node, 'search_result');
+       $node->body = drupal_render($node->content);
+
+       // Fetch comments for snippet.
+       $node->rendered .= ' ' . module_invoke('comment', 'node_update_index', $node);
+       // Fetch terms for snippet.
+       $node->rendered .= ' ' . module_invoke('taxonomy', 'node_update_index', $node);
+
+       $extra = module_invoke_all('node_search_result', $node);
+       $desc = search_excerpt($keys, render(node_view($node,"default")));
+           //$text = preg_replace('/' . $boundary . '(' . implode('|', $keys) . ')' . $boundary . '/iu', '<strong>\0</strong>', $text);
+       $results[] = array(
+         'link' => url('node/' . $item->sid, array('absolute' => TRUE)),
+         'type' => check_plain(node_type_get_name($node)),
+         'title' => $node->title,
+         //'user' => theme('username', array('account' => $node)),
+         //'date' => $node->changed,
+         'node' => $node,
+         'extra' => $extra,
+         'score' => $item->calculated_score,
+         'snippet' => $desc,
+       );
+
+     }
+     return $results;
+}
