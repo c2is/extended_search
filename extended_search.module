@@ -24,12 +24,14 @@ function extended_search_search_execute($keys = NULL, $conditions = NULL) {
     /*
      * Node type autorisés
      */
-    // todo:passer les conditions de content type en administrables, voir avec le module custom_search
+    // todo:put content condition into admin interface, see with custom_search module
+    /* Example of node filtering, uncoment to activate
     $queryor = db_or();
     $queryor->condition('n.type', "article");
     $queryor->condition('n.type', "page");
     $queryor->condition('n.type', "dealer_locator");
     $queryor->condition('n.type', "gamme");
+    */
     /*
      * La resuête d'origine
      */
@@ -38,7 +40,11 @@ function extended_search_search_execute($keys = NULL, $conditions = NULL) {
        ->condition('n.language', $GLOBALS["language"]->language)
        ->addTag('node_access')
        ->searchExpression($keys, 'node')
-       ->condition($queryor);
+       ->searchExpression($keys, 'node');
+
+    if($queryor){
+        $query->condition($queryor);
+    }
 
      // Insert special keywords.
      $query->setOption('type', 'n.type');
