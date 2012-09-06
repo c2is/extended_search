@@ -1,0 +1,7 @@
+name = Extended Search
+description =  Extends search by regular expression and other parameters
+core = 7.x
+package = Extended Search
+version = 7.x-1.0
+dependencies[] = search
+files[] = extended_search.extender.inc.php
